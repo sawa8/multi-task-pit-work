@@ -1,0 +1,22 @@
+{
+  "name": "PIT WORK",
+  "short_name": "PIT WORK",
+  "description": "MULTI-TASK PIT WORK — 複数案件Todoアプリ",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F4E9DE",
+  "theme_color": "#D96A48",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

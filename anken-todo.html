@@ -304,6 +304,7 @@ footer{margin-top:26px;font-size:.7rem;color:var(--muted);line-height:1.8;border
   <div class="hspace"></div>
   <div class="hbtns">
     <span id="saveState"><span class="dot"></span><span id="saveStateTxt">保存済み</span></span>
+    <button class="btn" id="btnSync">☁ 同期</button>
     <button class="btn" id="btnOpenMd">📂 md読込</button>
     <button class="btn" id="btnSaveMd">💾 mdへ保存</button>
     <button class="btn" id="btnCsv">⬇ CSV</button>
@@ -457,6 +458,45 @@ const LS_KEY = "anken_todo_md_v1";
 const PALETTE = ["#2987BC","#D96A48","#2F496E","#4E8A47","#C25577","#A87A1E","#0E9488","#A9662F"];
 const PRI_ORDER = {"高":0,"中":1,"低":2};
 
+/* ================= cloud sync ================= */
+const SYNC_URL = "https://multi-task-pit-work-app.vercel.app/api/sync";
+const SYNC_TOKEN = "61efb2b85ed07ce45d142237272b474b";
+let syncPushTimer = null;
+
+async function syncPush(){
+  clearTimeout(syncPushTimer);
+  syncPushTimer = setTimeout(async ()=>{
+    try{
+      await fetch(SYNC_URL, {
+        method:"PUT",
+        headers:{"Authorization":"Bearer "+SYNC_TOKEN,"Content-Type":"application/json"},
+        body: JSON.stringify({data: state})
+      });
+    }catch(e){ console.warn("sync push failed", e); }
+  }, 2000);
+}
+
+async function syncPull(){
+  try{
+    const res = await fetch(SYNC_URL, {
+      headers:{"Authorization":"Bearer "+SYNC_TOKEN}
+    });
+    if(res.ok){
+      const {data} = await res.json();
+      if(data && data.tasks){
+        state = Object.assign(
+          {tasks:[],ankenColors:{},focusId:null,sortBy:"deadline",capacity:360,pomo:{}},
+          data
+        );
+        migrateColors();
+        localStorage.setItem(LS_KEY, JSON.stringify(state));
+        renderAll();
+        toast("☁️ クラウドから同期しました");
+      }
+    }
+  }catch(e){ console.warn("sync pull failed", e); }
+}
+
 let state = {
   tasks: [],            // {id,title,anken,proj,pri,est,min,target,deadline,bucket,subs:[{t,done}],done,doneAt,createdAt}
   ankenColors: {},      // name -> color
@@ -540,6 +580,7 @@ function download(filename, text, mime){
 function persist(){
   localStorage.setItem(LS_KEY, JSON.stringify(state));
   dirty = true; renderSaveState();
+  syncPush();
 }
 function loadLocal(){
   try{
@@ -1190,8 +1231,10 @@ function renderAll(){
 
 loadLocal();
 dirty = false;
+syncPull(); // 起動時にクラウドから同期
 
 $("btnAdd").onclick = () => openTaskModal(null);
+$("btnSync").onclick = syncPull;
 $("btnDup").onclick = openDupPicker;
 $("dupClose").onclick = () => $("dupOverlay").classList.remove("show");
 $("dupOverlay").onclick = e => { if(e.target === $("dupOverlay")) $("dupOverlay").classList.remove("show"); };
