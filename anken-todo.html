@@ -305,6 +305,7 @@ footer{margin-top:26px;font-size:.7rem;color:var(--muted);line-height:1.8;border
   <div class="hbtns">
     <span id="saveState"><span class="dot"></span><span id="saveStateTxt">保存済み</span></span>
     <button class="btn" id="btnSync">☁ 同期</button>
+    <button class="btn" id="btnSyncToken" title="Syncトークン設定">🔑</button>
     <button class="btn" id="btnOpenMd">📂 md読込</button>
     <button class="btn" id="btnSaveMd">💾 mdへ保存</button>
     <button class="btn" id="btnCsv">⬇ CSV</button>
@@ -460,10 +461,16 @@ const PRI_ORDER = {"高":0,"中":1,"低":2};
 
 /* ================= cloud sync ================= */
 const SYNC_URL = "https://multi-task-pit-work-app.vercel.app/api/sync";
-const SYNC_TOKEN = "61efb2b85ed07ce45d142237272b474b";
+let SYNC_TOKEN = localStorage.getItem("pitwork_sync_token") || "";
 let syncPushTimer = null;
 
+function setSyncToken(){
+  const t = prompt("Sync APIトークンを入力してください：", SYNC_TOKEN);
+  if(t !== null){ SYNC_TOKEN = t.trim(); localStorage.setItem("pitwork_sync_token", SYNC_TOKEN); }
+}
+
 async function syncPush(){
+  if(!SYNC_TOKEN) return;
   clearTimeout(syncPushTimer);
   syncPushTimer = setTimeout(async ()=>{
     try{
@@ -477,6 +484,7 @@ async function syncPush(){
 }
 
 async function syncPull(){
+  if(!SYNC_TOKEN) return;
   try{
     const res = await fetch(SYNC_URL, {
       headers:{"Authorization":"Bearer "+SYNC_TOKEN}
@@ -1235,6 +1243,7 @@ syncPull(); // 起動時にクラウドから同期
 
 $("btnAdd").onclick = () => openTaskModal(null);
 $("btnSync").onclick = syncPull;
+$("btnSyncToken").onclick = setSyncToken;
 $("btnDup").onclick = openDupPicker;
 $("dupClose").onclick = () => $("dupOverlay").classList.remove("show");
 $("dupOverlay").onclick = e => { if(e.target === $("dupOverlay")) $("dupOverlay").classList.remove("show"); };

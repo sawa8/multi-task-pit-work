@@ -1,5 +1,6 @@
-const API_URL = 'https://multi-task-pit-work-app.vercel.app/api/sync';
-const SYNC_TOKEN = '61efb2b85ed07ce45d142237272b474b';
+import { SYNC_API_URL, SYNC_TOKEN } from './config';
+
+const API_URL = SYNC_API_URL;
 
 let pushTimer = null;
 
