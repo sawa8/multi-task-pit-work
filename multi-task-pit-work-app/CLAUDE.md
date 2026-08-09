@@ -66,6 +66,12 @@ App.js が全状態を管理し、各コンポーネントにpropsで渡すフ�
 - `TURSO_AUTH_TOKEN` — Turso認証トークン
 - `SYNC_SECRET` — API Bearer トークン
 
+### クライアント側の認証情報
+
+- `src/config.js`（gitignore対象）にSyncトークンを保管
+- セットアップ時は `src/config.example.js` をコピーして値を設定
+- ブラウザ版（anken-todo.html）はlocalStorageにトークンを保管（🔑ボタンで設定）
+
 ## デザインシステム（src/theme.js）
 
 クリーム基調: 背景`#F4E9DE`、カード`#FFFCF7`、アクセント: ピンク`#ED8C72` + ブルー`#2987BC`。案件ごとに8色パレットから自動割当。
@@ -73,6 +79,12 @@ App.js が全状態を管理し、各コンポーネントにpropsで渡すフ�
 ## 両バージョンの同期ルール
 
 機能変更時は **Expo版（App.js + components）と ブラウザ版（anken-todo.html）の両方** を更新すること。状態構造・ストレージキー・sync APIは共通仕様。
+
+## 注意事項
+
+- Chrome自動翻訳対策済み（`lang="ja"` + `notranslate`メタタグ）。Web向け変更時は維持すること。
+- Expo SDK 54 を使用（Expo Go の対応バージョンに合わせるため）。SDK更新時はExpo Goとの互換性を確認。
+- Syncトークンはコードにハードコードしないこと（`src/config.js` はgitignore済み）。
 
 ## デプロイ先
 
