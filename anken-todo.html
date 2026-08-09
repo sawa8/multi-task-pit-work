@@ -1,0 +1,1255 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MULTI-TASK PIT WORK — 複数案件Todo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F4E9DE;
+  --card:#FFFCF7;
+  --card2:#FBF4EA;
+  --line:#E5D6C4;
+  --line2:#D8C6AE;
+  --ink:#3A3230;
+  --ink2:#6E6156;
+  --muted:#A2937F;
+  --pink:#ED8C72;
+  --pink-deep:#D96A48;
+  --blue:#2987BC;
+  --blue-deep:#1F6E9C;
+  --ok:#4E8A47;
+  --warn:#A87A1E;
+  --warn-bg:#F3E6C4;
+  --danger:#B3402F;
+  --danger-bg:#F5D9CE;
+  --radius:10px;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html{font-size:15px;}
+body{
+  font-family:'Roboto','Hiragino Kaku Gothic ProN','Hiragino Sans',sans-serif;
+  font-weight:400;
+  background:var(--bg);
+  color:var(--ink);
+  min-height:100vh;
+  font-variant-numeric:tabular-nums;
+}
+button{font-family:inherit;font-weight:400;cursor:pointer;}
+input,select,textarea{font-family:inherit;font-weight:400;font-size:.95rem;color:var(--ink);}
+
+.wrap{max-width:1180px;margin:0 auto;padding:18px 20px 80px;}
+
+/* ============ header ============ */
+header{
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  padding:10px 0 16px;border-bottom:1px solid var(--line2);
+}
+.logo{display:flex;align-items:baseline;gap:10px;}
+.logo h1{font-size:1.25rem;font-weight:400;letter-spacing:.14em;}
+.logo .sub{font-size:.68rem;letter-spacing:.22em;color:var(--muted);text-transform:uppercase;}
+.logo .pit{color:var(--pink-deep);}
+#todayLabel{font-size:.8rem;color:var(--ink2);letter-spacing:.06em;}
+.hspace{flex:1;}
+.hbtns{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.btn{
+  border:1px solid var(--line2);background:var(--card);color:var(--ink2);
+  padding:7px 13px;border-radius:8px;font-size:.8rem;letter-spacing:.05em;
+  transition:border-color .15s, color .15s, background .15s;
+}
+.btn:hover{border-color:var(--blue);color:var(--blue-deep);}
+.btn.primary{background:var(--blue);border-color:var(--blue);color:#fff;}
+.btn.primary:hover{background:var(--blue-deep);}
+.btn.accent{background:var(--pink);border-color:var(--pink);color:#fff;}
+.btn.accent:hover{background:var(--pink-deep);}
+#saveState{font-size:.72rem;color:var(--muted);display:flex;align-items:center;gap:5px;}
+#saveState .dot{width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block;}
+#saveState.dirty .dot{background:var(--pink);}
+
+/* ============ dashboard ============ */
+.dash{
+  display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin:18px 0 14px;
+}
+@media(max-width:980px){.dash{grid-template-columns:repeat(2,1fr);}}
+.tile{
+  background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  padding:14px 16px 12px;position:relative;overflow:hidden;
+}
+.tile .tlabel{
+  font-size:.62rem;letter-spacing:.2em;color:var(--muted);text-transform:uppercase;
+  margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;
+}
+.tile .tnum{font-size:1.9rem;line-height:1.1;color:var(--ink);}
+.tile .tnum .unit{font-size:.75rem;color:var(--muted);margin-left:4px;letter-spacing:.08em;}
+.tile .tsub{font-size:.7rem;color:var(--ink2);margin-top:6px;min-height:1em;}
+.tile .ticks{
+  position:absolute;left:0;right:0;bottom:0;height:5px;
+  background:repeating-linear-gradient(90deg,var(--line) 0 1px,transparent 1px 9px);
+  opacity:.8;
+}
+.tile.gauge{display:flex;gap:12px;align-items:center;}
+.tile.gauge .ginfo{flex:1;}
+.gauge svg{flex:0 0 auto;}
+.gauge .track{stroke:var(--line);fill:none;}
+.gauge .val{stroke:var(--blue);fill:none;stroke-linecap:round;transition:stroke-dashoffset .5s;}
+.gauge text{fill:var(--ink);font-size:15px;font-family:inherit;}
+
+/* capacity bar */
+.capbar{height:8px;border-radius:4px;background:var(--card2);border:1px solid var(--line);overflow:hidden;margin-top:8px;position:relative;}
+.capbar .fill{height:100%;background:var(--blue);border-radius:4px 0 0 4px;transition:width .4s, background .3s;}
+.capbar.warn .fill{background:var(--warn);}
+.capbar.over .fill{background:var(--danger);}
+.capnote{font-size:.7rem;margin-top:6px;color:var(--ink2);}
+.capnote.over{color:var(--danger);}
+.capnote.warn{color:var(--warn);}
+
+/* ============ pomodoro + focus row ============ */
+.midrow{display:grid;grid-template-columns:340px 1fr;gap:12px;margin-bottom:14px;}
+@media(max-width:980px){.midrow{grid-template-columns:1fr;}}
+.pomo{
+  background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  padding:16px;display:flex;gap:16px;align-items:center;
+}
+.pomo .ring{position:relative;width:110px;height:110px;flex:0 0 auto;}
+.pomo .ring svg{transform:rotate(-90deg);}
+.pomo .ring .rtrack{stroke:var(--line);fill:none;}
+.pomo .ring .rval{stroke:var(--pink);fill:none;stroke-linecap:round;transition:stroke-dashoffset .3s linear;}
+.pomo.break .ring .rval{stroke:var(--blue);}
+.pomo .rcenter{
+  position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+}
+.pomo .rtime{font-size:1.45rem;letter-spacing:.04em;}
+.pomo .rmode{font-size:.6rem;letter-spacing:.25em;color:var(--muted);text-transform:uppercase;margin-top:2px;}
+.pomo .pinfo{flex:1;}
+.pomo .plabel{font-size:.62rem;letter-spacing:.2em;color:var(--muted);text-transform:uppercase;margin-bottom:8px;}
+.pomo .pbtns{display:flex;gap:6px;margin:8px 0;}
+.pomo .pbtns .btn{padding:6px 12px;}
+.pomo .pcount{font-size:.78rem;color:var(--ink2);}
+.pomo .pcount b{font-weight:400;color:var(--pink-deep);font-size:1.05rem;}
+
+.focus{
+  background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  padding:16px 20px;position:relative;overflow:hidden;
+}
+.focus::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--pink);}
+.focus .flabel{font-size:.62rem;letter-spacing:.25em;color:var(--pink-deep);text-transform:uppercase;margin-bottom:8px;}
+.focus .ftitle{font-size:1.35rem;line-height:1.35;margin-bottom:8px;}
+.focus .fmeta{display:flex;gap:14px;flex-wrap:wrap;font-size:.78rem;color:var(--ink2);align-items:center;}
+.focus .fempty{color:var(--muted);font-size:.85rem;padding:12px 0;}
+.focus .fbtns{position:absolute;right:14px;top:12px;display:flex;gap:6px;}
+
+/* ============ controls ============ */
+.controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px;}
+.controls .sortsel,select,input[type=number]{
+  border:1px solid var(--line2);background:var(--card);border-radius:8px;padding:7px 10px;font-size:.8rem;color:var(--ink2);
+}
+.controls label{font-size:.72rem;color:var(--muted);letter-spacing:.1em;}
+.controls .cspace{flex:1;}
+
+/* ============ columns ============ */
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start;}
+@media(max-width:900px){.cols{grid-template-columns:1fr;}}
+.col{background:var(--card2);border:1px solid var(--line);border-radius:var(--radius);padding:12px;}
+.col h2{
+  font-size:.72rem;font-weight:400;letter-spacing:.25em;color:var(--ink2);text-transform:uppercase;
+  padding:2px 4px 10px;display:flex;align-items:center;gap:8px;
+}
+.col h2 .cnt{
+  background:var(--card);border:1px solid var(--line);border-radius:10px;
+  font-size:.68rem;padding:1px 9px;color:var(--muted);letter-spacing:0;
+}
+.col h2 .cmin{margin-left:auto;font-size:.68rem;color:var(--muted);letter-spacing:.05em;}
+
+/* task card */
+.task{
+  background:var(--card);border:1px solid var(--line);border-radius:8px;
+  padding:11px 12px 10px 14px;margin-bottom:9px;position:relative;
+}
+.task::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;border-radius:8px 0 0 8px;background:var(--acc,var(--line2));}
+.task .trow{display:flex;align-items:flex-start;gap:8px;}
+.task .chk{
+  width:19px;height:19px;border-radius:50%;border:1.5px solid var(--line2);background:#fff;
+  flex:0 0 auto;margin-top:2px;transition:border-color .15s;
+}
+.task .chk:hover{border-color:var(--blue);}
+.task .ttitle{font-size:.95rem;line-height:1.4;flex:1;}
+.task .tacts{display:flex;gap:2px;flex:0 0 auto;}
+.iconbtn{
+  border:none;background:none;color:var(--muted);font-size:.85rem;padding:2px 5px;border-radius:6px;line-height:1;
+}
+.iconbtn:hover{background:var(--card2);color:var(--blue-deep);}
+.iconbtn.on{color:var(--pink-deep);}
+.badges{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px;align-items:center;}
+.chip{
+  font-size:.66rem;padding:2px 8px;border-radius:9px;border:1px solid var(--line);
+  color:var(--ink2);background:var(--card2);letter-spacing:.03em;display:inline-flex;gap:4px;align-items:center;
+}
+.chip .cdot{width:7px;height:7px;border-radius:50%;display:inline-block;}
+.chip.p-high{background:#F8DFD4;border-color:#EBC0AC;color:#A3492C;}
+.chip.p-mid{background:#F3E9CB;border-color:#E0CE9C;color:#7C5E13;}
+.chip.p-low{background:#DFE9F0;border-color:#BFD4E2;color:#3A6C8A;}
+.chip.due-over{background:var(--danger-bg);border-color:#E0A899;color:var(--danger);}
+.chip.due-near{background:var(--warn-bg);border-color:#DEC888;color:var(--warn);}
+.chip.stale{background:var(--warn-bg);border-color:#DEC888;color:var(--warn);}
+/* subtasks */
+.subs{margin-top:8px;border-top:1px dashed var(--line);padding-top:7px;}
+.subs .sline{display:flex;align-items:center;gap:7px;font-size:.8rem;color:var(--ink2);padding:2px 0;}
+.subs .sline input[type=checkbox]{accent-color:var(--blue);width:13px;height:13px;}
+.subs .sline.done span{text-decoration:line-through;color:var(--muted);}
+.subs .sline .sdel{margin-left:auto;visibility:hidden;}
+.subs .sline:hover .sdel{visibility:visible;}
+.subadd{display:flex;gap:6px;margin-top:4px;}
+.subadd input{
+  flex:1;border:1px solid var(--line);border-radius:6px;padding:4px 8px;font-size:.75rem;background:#fff;
+}
+.subadd button{border:1px solid var(--line);background:var(--card2);border-radius:6px;font-size:.7rem;padding:2px 10px;color:var(--ink2);}
+.sprog{font-size:.66rem;color:var(--muted);margin-left:4px;}
+.emptycol{color:var(--muted);font-size:.8rem;text-align:center;padding:22px 0;}
+
+/* done section & anken summary */
+.bottom{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;align-items:start;}
+@media(max-width:900px){.bottom{grid-template-columns:1fr;}}
+.panel{background:var(--card2);border:1px solid var(--line);border-radius:var(--radius);padding:12px;}
+.panel h2{font-size:.72rem;font-weight:400;letter-spacing:.25em;color:var(--ink2);text-transform:uppercase;padding:2px 4px 10px;display:flex;gap:8px;align-items:center;}
+.panel h2 .cnt{background:var(--card);border:1px solid var(--line);border-radius:10px;font-size:.68rem;padding:1px 9px;color:var(--muted);letter-spacing:0;}
+.doneitem{
+  display:flex;gap:8px;align-items:center;font-size:.8rem;color:var(--ink2);
+  background:var(--card);border:1px solid var(--line);border-radius:7px;padding:7px 10px;margin-bottom:6px;
+}
+.doneitem .dtitle{text-decoration:line-through;color:var(--muted);flex:1;}
+.doneitem .dt{font-size:.66rem;color:var(--muted);}
+.doneitem .cdot{width:8px;height:8px;border-radius:50%;flex:0 0 auto;}
+.ankrow{
+  display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);
+  border-radius:7px;padding:9px 12px;margin-bottom:6px;font-size:.82rem;
+}
+.ankrow .cdot{width:9px;height:9px;border-radius:50%;flex:0 0 auto;}
+.ankrow .aname{flex:1;}
+.ankrow .ah{color:var(--blue-deep);}
+.ankrow .an{color:var(--muted);font-size:.7rem;}
+.ankbar{height:4px;border-radius:2px;background:var(--card2);flex:1.2;overflow:hidden;border:1px solid var(--line);}
+.ankbar i{display:block;height:100%;border-radius:2px;}
+
+/* ============ modal ============ */
+.overlay{
+  position:fixed;inset:0;background:rgba(58,50,48,.35);display:none;
+  align-items:flex-start;justify-content:center;padding:40px 16px;z-index:50;overflow:auto;
+}
+.overlay.show{display:flex;}
+.modal{
+  background:var(--card);border:1px solid var(--line2);border-radius:12px;
+  width:100%;max-width:560px;padding:22px;
+}
+.modal h3{font-size:.8rem;font-weight:400;letter-spacing:.25em;text-transform:uppercase;color:var(--ink2);margin-bottom:16px;}
+.frow{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;}
+.frow.single{grid-template-columns:1fr;}
+.fld label{display:block;font-size:.66rem;letter-spacing:.15em;color:var(--muted);text-transform:uppercase;margin-bottom:4px;}
+.fld input,.fld select,.fld textarea{
+  width:100%;border:1px solid var(--line2);border-radius:8px;padding:8px 10px;background:#fff;
+}
+.fld textarea{min-height:70px;resize:vertical;}
+.mbtns{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;}
+/* report modal */
+.report{max-width:640px;}
+.repgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;}
+.repgrid .tile .tnum{font-size:1.6rem;}
+.reppre{
+  background:var(--card2);border:1px solid var(--line);border-radius:8px;padding:14px;
+  font-size:.78rem;white-space:pre-wrap;color:var(--ink2);max-height:300px;overflow:auto;line-height:1.7;
+}
+/* duplicate picker */
+.dupsearch{width:100%;border:1px solid var(--line2);border-radius:8px;padding:8px 12px;background:#fff;margin-bottom:10px;}
+.duplist{max-height:380px;overflow:auto;}
+.dupitem{
+  display:flex;align-items:center;gap:9px;width:100%;text-align:left;
+  background:var(--card2);border:1px solid var(--line);border-radius:8px;
+  padding:9px 12px;margin-bottom:6px;font-size:.85rem;color:var(--ink);
+  transition:border-color .15s, background .15s;
+}
+.dupitem:hover{border-color:var(--blue);background:#fff;}
+.dupitem .cdot{width:9px;height:9px;border-radius:50%;flex:0 0 auto;}
+.dupitem .dtit{flex:1;line-height:1.4;}
+.dupitem .dmeta{font-size:.66rem;color:var(--muted);flex:0 0 auto;text-align:right;line-height:1.5;}
+.dupitem .dst{font-size:.62rem;padding:1px 7px;border-radius:8px;border:1px solid var(--line);color:var(--muted);flex:0 0 auto;}
+.dupitem .dst.fin{background:#E4EEE2;border-color:#BFD5BB;color:var(--ok);}
+.toast{
+  position:fixed;bottom:22px;left:50%;transform:translateX(-50%);
+  background:var(--ink);color:#FDF7EE;font-size:.8rem;padding:9px 18px;border-radius:9px;
+  opacity:0;pointer-events:none;transition:opacity .25s;z-index:99;letter-spacing:.05em;
+}
+.toast.show{opacity:.94;}
+.toast.praise{
+  left:auto;right:22px;transform:translateY(8px);
+  background:var(--pink-deep);color:#fff;font-size:.95rem;padding:12px 24px;border-radius:12px;
+  box-shadow:0 6px 20px rgba(217,106,72,.4);text-align:center;line-height:1.6;max-width:min(420px,80vw);
+  transition:opacity .25s, transform .25s;
+}
+.toast.praise.show{opacity:1;transform:translateY(0);}
+.toast.praise small{display:block;font-size:.68rem;opacity:.85;letter-spacing:.05em;}
+footer{margin-top:26px;font-size:.7rem;color:var(--muted);line-height:1.8;border-top:1px solid var(--line);padding-top:12px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="logo">
+    <span class="sub">MULTI-TASK</span>
+    <h1><span class="pit">PIT</span> WORK</h1>
+  </div>
+  <span id="todayLabel"></span>
+  <div class="hspace"></div>
+  <div class="hbtns">
+    <span id="saveState"><span class="dot"></span><span id="saveStateTxt">保存済み</span></span>
+    <button class="btn" id="btnOpenMd">📂 md読込</button>
+    <button class="btn" id="btnSaveMd">💾 mdへ保存</button>
+    <button class="btn" id="btnCsv">⬇ CSV</button>
+    <button class="btn accent" id="btnReview">🌙 1日のふり返り</button>
+    <button class="btn" id="btnDup">⧉ 過去から複製</button>
+    <button class="btn primary" id="btnAdd">＋ タスク追加</button>
+  </div>
+</header>
+
+<!-- dashboard -->
+<section class="dash" id="dash"></section>
+
+<!-- pomodoro + focus -->
+<section class="midrow">
+  <div class="pomo" id="pomoBox">
+    <div class="ring">
+      <svg width="110" height="110" viewBox="0 0 110 110">
+        <circle class="rtrack" cx="55" cy="55" r="48" stroke-width="4"/>
+        <circle class="rval" id="pomoArc" cx="55" cy="55" r="48" stroke-width="4"
+                stroke-dasharray="301.6" stroke-dashoffset="0"/>
+      </svg>
+      <div class="rcenter">
+        <div class="rtime" id="pomoTime">25:00</div>
+        <div class="rmode" id="pomoMode">FOCUS</div>
+      </div>
+    </div>
+    <div class="pinfo">
+      <div class="plabel">Pomodoro 25 / 5</div>
+      <div class="pbtns">
+        <button class="btn primary" id="pomoStart">▶ 開始</button>
+        <button class="btn" id="pomoReset">リセット</button>
+      </div>
+      <div class="pcount">今日の集中 <b id="pomoCount">0</b> 回</div>
+      <div class="pcount" id="pomoHint" style="font-size:.68rem;color:var(--muted);margin-top:3px;">25分集中 → 5分休憩を自動で切替</div>
+    </div>
+  </div>
+  <div class="focus" id="focusBox"></div>
+</section>
+
+<!-- controls -->
+<div class="controls">
+  <label>並べ替え</label>
+  <select class="sortsel" id="sortSel">
+    <option value="deadline">締切順</option>
+    <option value="priority">優先度順</option>
+  </select>
+  <div class="cspace"></div>
+  <label>今日の容量(分)</label>
+  <input type="number" id="capInput" min="30" step="30" style="width:90px;">
+</div>
+
+<!-- today / later -->
+<section class="cols">
+  <div class="col" id="colToday">
+    <h2>☀ 今日やる <span class="cnt" id="cntToday">0</span><span class="cmin" id="minToday"></span></h2>
+    <div id="listToday"></div>
+  </div>
+  <div class="col" id="colLater">
+    <h2>🌤 あとで <span class="cnt" id="cntLater">0</span><span class="cmin" id="minLater"></span></h2>
+    <div id="listLater"></div>
+  </div>
+</section>
+
+<!-- done + summary -->
+<section class="bottom">
+  <div class="panel">
+    <h2>✔ 完了済み <span class="cnt" id="cntDone">0</span></h2>
+    <div id="listDone"></div>
+  </div>
+  <div class="panel">
+    <h2>◧ 案件別 稼働集計（完了ベース）</h2>
+    <div id="ankSummary"></div>
+  </div>
+</section>
+
+<footer>
+  データはこのブラウザ（localStorage）に自動保存されます。「mdへ保存」で Markdown ファイルに書き出し、「md読込」で復元できます。<br>
+  CSVは請求・報告用にそのままExcelで開けます（UTF-8 BOM付き）。
+</footer>
+</div>
+
+<!-- task modal -->
+<div class="overlay" id="taskOverlay">
+  <div class="modal">
+    <h3 id="modalTitle">タスク追加</h3>
+    <div class="frow single">
+      <div class="fld"><label>タスク名 *</label><input id="fTitle" placeholder="例：トップページのコーディング"></div>
+    </div>
+    <div class="frow">
+      <div class="fld"><label>案件 *</label><input id="fAnken" list="ankenList" placeholder="例：A社コーポレート"><datalist id="ankenList"></datalist></div>
+      <div class="fld"><label>プロジェクト</label><input id="fProj" placeholder="例：リニューアル第2期"></div>
+    </div>
+    <div class="frow">
+      <div class="fld"><label>優先度</label>
+        <select id="fPri"><option value="高">高</option><option value="中" selected>中</option><option value="低">低</option></select>
+      </div>
+      <div class="fld"><label>区分</label>
+        <select id="fBucket"><option value="today">今日やる</option><option value="later">あとで</option></select>
+      </div>
+    </div>
+    <div class="frow">
+      <div class="fld"><label>見積工数 (h)</label><input id="fEst" type="number" min="0" step="0.5" placeholder="2"></div>
+      <div class="fld"><label>所要時間 (分)</label><input id="fMin" type="number" min="0" step="5" placeholder="90"></div>
+    </div>
+    <div class="frow">
+      <div class="fld"><label>作業完了目安 目標日</label><input id="fTarget" type="date"></div>
+      <div class="fld"><label>締切</label><input id="fDeadline" type="date"></div>
+    </div>
+    <div class="frow single">
+      <div class="fld"><label>サブタスク（1行1件）</label><textarea id="fSubs" placeholder="ワイヤー確認&#10;素材受領&#10;実装"></textarea></div>
+    </div>
+    <div class="mbtns">
+      <button class="btn" id="fCancel">キャンセル</button>
+      <button class="btn primary" id="fSave">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- duplicate picker modal -->
+<div class="overlay" id="dupOverlay">
+  <div class="modal">
+    <h3>⧉ 過去のタスクから複製</h3>
+    <input class="dupsearch" id="dupSearch" placeholder="🔍 タスク名・案件・プロジェクトで絞り込み">
+    <div class="duplist" id="dupList"></div>
+    <div class="mbtns">
+      <button class="btn" id="dupClose">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<!-- review modal -->
+<div class="overlay" id="reviewOverlay">
+  <div class="modal report">
+    <h3>🌙 1日のふり返り <span id="revDate" style="letter-spacing:.05em;"></span></h3>
+    <div class="repgrid" id="revTiles"></div>
+    <div class="reppre" id="revPre"></div>
+    <div class="mbtns">
+      <button class="btn" id="revClose">閉じる</button>
+      <button class="btn" id="revCopy">📋 コピー</button>
+      <button class="btn primary" id="revDl">⬇ 報告書md ダウンロード</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+/* ================= state ================= */
+const LS_KEY = "anken_todo_md_v1";
+const PALETTE = ["#2987BC","#D96A48","#2F496E","#4E8A47","#C25577","#A87A1E","#0E9488","#A9662F"];
+const PRI_ORDER = {"高":0,"中":1,"低":2};
+
+let state = {
+  tasks: [],            // {id,title,anken,proj,pri,est,min,target,deadline,bucket,subs:[{t,done}],done,doneAt,createdAt}
+  ankenColors: {},      // name -> color
+  focusId: null,
+  sortBy: "deadline",
+  capacity: 360,        // 今日の容量(分)
+  pomo: {}              // 'YYYY-MM-DD' -> 集中回数
+};
+let dirty = false;      // md未保存フラグ
+let fileHandle = null;  // File System Access API handle
+let editingId = null;
+
+/* ================= utils ================= */
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+function todayStr(d = new Date()){
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+}
+function parseDate(s){ const [y,m,d] = s.split("-").map(Number); return new Date(y, m-1, d); }
+function daysFromToday(dateStr){
+  if(!dateStr) return null;
+  return Math.round((parseDate(dateStr) - parseDate(todayStr())) / 86400000);
+}
+function weekStart(){
+  const d = new Date(); d.setHours(0,0,0,0);
+  d.setDate(d.getDate() - (d.getDay()+6)%7); // 月曜始まり
+  return d;
+}
+function nowStamp(){
+  const d = new Date();
+  return todayStr(d) + " " + String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0");
+}
+function taskMinutes(t){ // 稼働時間の基準：所要時間(分) > 見積工数(h)
+  if(t.min > 0) return t.min;
+  if(t.est > 0) return t.est * 60;
+  return 0;
+}
+function ankenColor(name){
+  if(!state.ankenColors[name]){
+    const used = Object.keys(state.ankenColors).length;
+    state.ankenColors[name] = PALETTE[used % PALETTE.length];
+  }
+  return state.ankenColors[name];
+}
+function toast(msg, cls){
+  const t = $("toast");
+  if(cls === "praise"){ t.innerHTML = msg; } else { t.textContent = msg; }
+  t.className = "toast show" + (cls ? " " + cls : "");
+  clearTimeout(toast._tm);
+  toast._tm = setTimeout(() => t.classList.remove("show"), cls === "praise" ? 3400 : 2200);
+}
+/* 完了時の関西弁ほめコメント */
+const PRAISES = [
+  "ようやったなぁ！えらいで〜👏",
+  "さすがやん！その調子やで🔥",
+  "うわ、仕事はやっ！かっこええわ〜✨",
+  "ほんまようがんばった、天才ちゃう？🎉",
+  "よっしゃ完了！ええ感じやん💪",
+  "きっちり終わらせて、ほんまえらい！🌟",
+  "また一つ片付いたで！最高やん🙌",
+  "あんた、やる時はやるなぁ〜😆",
+  "お見事！茶ぁでも飲んで一服しよか☕",
+  "ナイスやで！この調子でいこな🚀",
+  "はよ終わったやん、腕上げたなぁ👍",
+  "ばっちりや！ほんま頼りになるわ〜💯"
+];
+function praise(title){
+  const msg = PRAISES[Math.floor(Math.random()*PRAISES.length)];
+  toast(msg + `<small>✔ ${esc(title)}</small>`, "praise");
+}
+function download(filename, text, mime){
+  const blob = new Blob([text], {type: mime || "text/plain;charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = filename;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+
+/* ================= persistence ================= */
+function persist(){
+  localStorage.setItem(LS_KEY, JSON.stringify(state));
+  dirty = true; renderSaveState();
+}
+function loadLocal(){
+  try{
+    const raw = localStorage.getItem(LS_KEY);
+    if(raw) state = Object.assign(state, JSON.parse(raw));
+  }catch(e){ console.warn("localStorage読込失敗", e); }
+  migrateColors();
+}
+function migrateColors(){ // 旧パレットの紫はネイビー #2F496E に置き換える
+  for(const k in state.ankenColors){
+    if(String(state.ankenColors[k]).toUpperCase() === "#8A6FC8") state.ankenColors[k] = "#2F496E";
+  }
+}
+function renderSaveState(){
+  const el = $("saveState");
+  el.classList.toggle("dirty", dirty);
+  $("saveStateTxt").textContent = dirty ? "md未保存" : "保存済み";
+}
+
+/* ---- markdown serialize / parse ---- */
+function taskLineMd(t){
+  const box = t.done ? "x" : " ";
+  const meta = [];
+  if(t.proj) meta.push("PJ:" + t.proj);
+  meta.push("優先:" + t.pri);
+  if(t.est) meta.push("見積:" + t.est + "h");
+  if(t.min) meta.push("所要:" + t.min + "分");
+  if(t.target) meta.push("目標:" + t.target);
+  if(t.deadline) meta.push("締切:" + t.deadline);
+  if(t.done && t.doneAt) meta.push("完了:" + t.doneAt);
+  let s = `- [${box}] 【${t.anken}】${t.title}（${meta.join(" / ")}）`;
+  for(const st of (t.subs||[])) s += `\n  - [${st.done?"x":" "}] ${st.t}`;
+  return s;
+}
+function buildMd(){
+  const open = state.tasks.filter(t=>!t.done);
+  const done = state.tasks.filter(t=>t.done);
+  const st = stats();
+  const lines = [];
+  lines.push("# MULTI-TASK PIT WORK — 案件Todoデータ");
+  lines.push("");
+  lines.push("最終保存: " + nowStamp());
+  lines.push("");
+  lines.push("## ダッシュボード");
+  lines.push("- 今日の完了: " + st.doneToday + "件");
+  lines.push("- 今週の稼働: " + st.weekHours.toFixed(1) + "h");
+  lines.push("- 完了率: " + st.rate + "%");
+  lines.push("- 今日の集中: " + st.pomoToday + "回");
+  lines.push("");
+  lines.push("## 今日やる");
+  open.filter(t=>t.bucket==="today").forEach(t=>lines.push(taskLineMd(t)));
+  lines.push("");
+  lines.push("## あとで");
+  open.filter(t=>t.bucket==="later").forEach(t=>lines.push(taskLineMd(t)));
+  lines.push("");
+  lines.push("## 完了");
+  done.forEach(t=>lines.push(taskLineMd(t)));
+  lines.push("");
+  lines.push("---");
+  lines.push("以下はアプリ復元用データです。編集しないでください。");
+  lines.push("");
+  lines.push("<!-- ANKEN_TODO_JSON");
+  lines.push(JSON.stringify(state, null, 1));
+  lines.push("ANKEN_TODO_JSON -->");
+  lines.push("");
+  return lines.join("\n");
+}
+function parseMd(text){
+  const m = text.match(/<!-- ANKEN_TODO_JSON\n([\s\S]*?)\nANKEN_TODO_JSON -->/);
+  if(!m) throw new Error("このmdファイルに復元用データ（ANKEN_TODO_JSONブロック）が見つかりません。");
+  return JSON.parse(m[1]);
+}
+const supportsFS = "showSaveFilePicker" in window;
+async function saveMd(){
+  const md = buildMd();
+  if(supportsFS){
+    try{
+      if(!fileHandle){
+        fileHandle = await window.showSaveFilePicker({
+          suggestedName: "pitwork-data.md",
+          types: [{description:"Markdown", accept:{"text/markdown":[".md"]}}]
+        });
+      }
+      const w = await fileHandle.createWritable();
+      await w.write(md); await w.close();
+      dirty = false; renderSaveState();
+      toast("💾 mdファイルに保存しました");
+      return;
+    }catch(e){
+      if(e && e.name === "AbortError") return;
+      console.warn("FS API失敗、ダウンロードにフォールバック", e);
+    }
+  }
+  download("pitwork-data.md", md, "text/markdown;charset=utf-8");
+  dirty = false; renderSaveState();
+  toast("💾 mdファイルをダウンロードしました");
+}
+async function openMd(){
+  try{
+    let text;
+    if(supportsFS && "showOpenFilePicker" in window){
+      const [h] = await window.showOpenFilePicker({
+        types: [{description:"Markdown", accept:{"text/markdown":[".md"],"text/plain":[".md",".txt"]}}]
+      });
+      fileHandle = h;
+      text = await (await h.getFile()).text();
+    }else{
+      text = await new Promise((res, rej) => {
+        const inp = document.createElement("input");
+        inp.type = "file"; inp.accept = ".md,.txt";
+        inp.onchange = () => {
+          const f = inp.files[0];
+          if(!f) return rej(new Error("cancel"));
+          const r = new FileReader();
+          r.onload = () => res(r.result); r.onerror = rej;
+          r.readAsText(f);
+        };
+        inp.click();
+      });
+    }
+    const data = parseMd(text);
+    state = Object.assign({tasks:[],ankenColors:{},focusId:null,sortBy:"deadline",capacity:360,pomo:{}}, data);
+    migrateColors();
+    localStorage.setItem(LS_KEY, JSON.stringify(state));
+    dirty = false;
+    renderAll();
+    toast("📂 mdファイルから復元しました（" + state.tasks.length + "件）");
+  }catch(e){
+    if(e && (e.name === "AbortError" || e.message === "cancel")) return;
+    alert("読み込みに失敗しました：" + e.message);
+  }
+}
+
+/* ================= stats ================= */
+function stats(){
+  const today = todayStr();
+  const ws = weekStart();
+  const doneTasks = state.tasks.filter(t=>t.done);
+  const doneToday = doneTasks.filter(t=>t.doneAt && t.doneAt.slice(0,10) === today);
+  const weekMin = doneTasks
+    .filter(t=>t.doneAt && parseDate(t.doneAt.slice(0,10)) >= ws)
+    .reduce((s,t)=>s+taskMinutes(t), 0);
+  const total = state.tasks.length;
+  const todayOpen = state.tasks.filter(t=>!t.done && t.bucket==="today");
+  const todayPlanned = todayOpen.reduce((s,t)=>s+taskMinutes(t), 0);
+  return {
+    doneToday: doneToday.length,
+    doneTodayMin: doneToday.reduce((s,t)=>s+taskMinutes(t), 0),
+    weekHours: weekMin/60,
+    rate: total ? Math.round(doneTasks.length/total*100) : 0,
+    doneCount: doneTasks.length, total,
+    todayPlanned,
+    pomoToday: state.pomo[today] || 0,
+    doneTodayList: doneToday
+  };
+}
+
+/* ================= dashboard ================= */
+function gaugeSvg(pct){
+  const r = 30, c = 2*Math.PI*r;
+  const off = c*(1 - Math.min(1, pct/100));
+  return `<svg width="76" height="76" viewBox="0 0 76 76">
+    <circle class="track" cx="38" cy="38" r="${r}" stroke-width="5"/>
+    <circle class="val" cx="38" cy="38" r="${r}" stroke-width="5"
+      stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}"
+      transform="rotate(-90 38 38)"/>
+    <text x="38" y="43" text-anchor="middle">${pct}%</text>
+  </svg>`;
+}
+function renderDash(){
+  const st = stats();
+  const cap = state.capacity;
+  const pctCap = cap ? Math.round(st.todayPlanned/cap*100) : 0;
+  const capCls = pctCap > 100 ? "over" : (pctCap >= 80 ? "warn" : "");
+  const capMsg = pctCap > 100
+    ? `⚠ 詰め込みすぎです（超過 ${st.todayPlanned-cap}分）`
+    : (pctCap >= 80 ? `△ 余裕が少なめです（残り ${cap-st.todayPlanned}分）` : `残り容量 ${cap-st.todayPlanned}分`);
+  $("dash").innerHTML = `
+    <div class="tile">
+      <div class="tlabel">今日の完了数</div>
+      <div class="tnum">${st.doneToday}<span class="unit">件</span></div>
+      <div class="tsub">消化 ${Math.round(st.doneTodayMin)}分</div>
+      <div class="ticks"></div>
+    </div>
+    <div class="tile">
+      <div class="tlabel">今週の稼働時間</div>
+      <div class="tnum">${st.weekHours.toFixed(1)}<span class="unit">h</span></div>
+      <div class="tsub">月曜起点・完了タスクの実績</div>
+      <div class="ticks"></div>
+    </div>
+    <div class="tile gauge">
+      ${gaugeSvg(st.rate)}
+      <div class="ginfo">
+        <div class="tlabel">完了率</div>
+        <div class="tsub">${st.doneCount} / ${st.total} 件</div>
+      </div>
+    </div>
+    <div class="tile">
+      <div class="tlabel">今日の合計時間<span>${st.todayPlanned}/${cap}分</span></div>
+      <div class="tnum">${st.todayPlanned}<span class="unit">分</span></div>
+      <div class="capbar ${capCls}"><div class="fill" style="width:${Math.min(100,pctCap)}%"></div></div>
+      <div class="capnote ${capCls}">${capMsg}</div>
+    </div>
+    <div class="tile">
+      <div class="tlabel">今日の集中回数</div>
+      <div class="tnum">${st.pomoToday}<span class="unit">回</span></div>
+      <div class="tsub">ポモドーロ 25分 × ${st.pomoToday}</div>
+      <div class="ticks"></div>
+    </div>`;
+}
+
+/* ================= focus ================= */
+function renderFocus(){
+  const t = state.tasks.find(x=>x.id === state.focusId && !x.done);
+  const box = $("focusBox");
+  if(!t){
+    box.innerHTML = `<div class="flabel">📌 今日のフォーカス</div>
+      <div class="fempty">タスクの 📌 を押して、今日いちばん進めたい1件をピン留めしましょう。</div>`;
+    return;
+  }
+  const subsDone = (t.subs||[]).filter(s=>s.done).length;
+  const meta = [];
+  meta.push(`<span class="chip"><span class="cdot" style="background:${ankenColor(t.anken)}"></span>${esc(t.anken)}</span>`);
+  if(t.proj) meta.push(`<span class="chip">${esc(t.proj)}</span>`);
+  meta.push(priChip(t.pri));
+  if(t.min) meta.push(`<span class="chip">⏱ ${t.min}分</span>`);
+  else if(t.est) meta.push(`<span class="chip">見積 ${t.est}h</span>`);
+  if(t.deadline) meta.push(dueChip(t.deadline));
+  if((t.subs||[]).length) meta.push(`<span class="chip">☑ ${subsDone}/${t.subs.length}</span>`);
+  box.innerHTML = `
+    <div class="flabel">📌 今日のフォーカス</div>
+    <div class="ftitle">${esc(t.title)}</div>
+    <div class="fmeta">${meta.join("")}</div>
+    <div class="fbtns">
+      <button class="btn" data-act="focusdone">✔ 完了にする</button>
+      <button class="btn" data-act="unfocus">ピン解除</button>
+    </div>`;
+  box.querySelector('[data-act="focusdone"]').onclick = () => toggleDone(t.id);
+  box.querySelector('[data-act="unfocus"]').onclick = () => { state.focusId = null; persist(); renderAll(); };
+}
+
+/* ================= chips ================= */
+function priChip(p){
+  const cls = p === "高" ? "p-high" : p === "低" ? "p-low" : "p-mid";
+  return `<span class="chip ${cls}">優先 ${p}</span>`;
+}
+function dueChip(deadline){
+  const d = daysFromToday(deadline);
+  if(d === null) return "";
+  if(d < 0)  return `<span class="chip due-over">⚠ 締切超過 ${-d}日</span>`;
+  if(d === 0) return `<span class="chip due-over">⏰ 今日締切</span>`;
+  if(d <= 2) return `<span class="chip due-near">⏰ 締切まで${d}日</span>`;
+  return `<span class="chip">締切 ${deadline.slice(5).replace("-","/")}</span>`;
+}
+
+/* ================= task list ================= */
+function sortTasks(arr){
+  const a = [...arr];
+  if(state.sortBy === "priority"){
+    a.sort((x,y) => (PRI_ORDER[x.pri]-PRI_ORDER[y.pri]) || cmpDeadline(x,y));
+  }else{
+    a.sort((x,y) => cmpDeadline(x,y) || (PRI_ORDER[x.pri]-PRI_ORDER[y.pri]));
+  }
+  return a;
+}
+function cmpDeadline(x,y){
+  const dx = x.deadline || "9999-12-31", dy = y.deadline || "9999-12-31";
+  return dx < dy ? -1 : dx > dy ? 1 : 0;
+}
+function taskCard(t){
+  const col = ankenColor(t.anken);
+  const stale = !t.done && t.createdAt && (daysFromToday(t.createdAt) <= -3);
+  const staleDays = stale ? -daysFromToday(t.createdAt) : 0;
+  const subs = t.subs || [];
+  const subsDone = subs.filter(s=>s.done).length;
+  const badges = [];
+  badges.push(`<span class="chip"><span class="cdot" style="background:${col}"></span>${esc(t.anken)}</span>`);
+  if(t.proj) badges.push(`<span class="chip">${esc(t.proj)}</span>`);
+  badges.push(priChip(t.pri));
+  if(t.est) badges.push(`<span class="chip">見積 ${t.est}h</span>`);
+  if(t.min) badges.push(`<span class="chip">⏱ ${t.min}分</span>`);
+  if(t.target) badges.push(`<span class="chip">目標 ${t.target.slice(5).replace("-","/")}</span>`);
+  if(t.deadline) badges.push(dueChip(t.deadline));
+  if(stale) badges.push(`<span class="chip stale">🐌 先延ばし中 ${staleDays}日</span>`);
+
+  const subHtml = `
+    <div class="subs">
+      ${subs.map((s,i)=>`
+        <div class="sline ${s.done?"done":""}">
+          <input type="checkbox" ${s.done?"checked":""} data-sub="${i}">
+          <span>${esc(s.t)}</span>
+          <button class="iconbtn sdel" data-sdel="${i}" title="サブタスク削除">×</button>
+        </div>`).join("")}
+      ${subs.length ? `<div class="sprog">☑ ${subsDone}/${subs.length}</div>` : ""}
+      <div class="subadd">
+        <input placeholder="＋ サブタスクを追加" data-subadd>
+        <button data-subaddbtn>追加</button>
+      </div>
+    </div>`;
+
+  const el = document.createElement("div");
+  el.className = "task";
+  el.style.setProperty("--acc", col);
+  el.innerHTML = `
+    <div class="trow">
+      <button class="chk" title="完了にする"></button>
+      <div class="ttitle">${esc(t.title)}</div>
+      <div class="tacts">
+        <button class="iconbtn ${state.focusId===t.id?"on":""}" data-a="focus" title="今日のフォーカスにピン留め">📌</button>
+        <button class="iconbtn" data-a="move" title="${t.bucket==="today"?"「あとで」へ移動":"「今日やる」へ移動"}">${t.bucket==="today"?"🌤":"☀"}</button>
+        <button class="iconbtn" data-a="edit" title="編集">✎</button>
+        <button class="iconbtn" data-a="dup" title="複製して新規追加">⧉</button>
+        <button class="iconbtn" data-a="del" title="削除">🗑</button>
+      </div>
+    </div>
+    <div class="badges">${badges.join("")}</div>
+    ${subHtml}`;
+
+  el.querySelector(".chk").onclick = () => toggleDone(t.id);
+  el.querySelector('[data-a="focus"]').onclick = () => {
+    state.focusId = state.focusId === t.id ? null : t.id;
+    persist(); renderAll();
+  };
+  el.querySelector('[data-a="move"]').onclick = () => {
+    t.bucket = t.bucket === "today" ? "later" : "today";
+    persist(); renderAll();
+  };
+  el.querySelector('[data-a="edit"]').onclick = () => openTaskModal(t.id);
+  el.querySelector('[data-a="dup"]').onclick = () => duplicateTask(t.id);
+  el.querySelector('[data-a="del"]').onclick = () => {
+    if(confirm(`「${t.title}」を削除しますか？`)){
+      state.tasks = state.tasks.filter(x=>x.id!==t.id);
+      if(state.focusId === t.id) state.focusId = null;
+      persist(); renderAll();
+    }
+  };
+  el.querySelectorAll("[data-sub]").forEach(cb => {
+    cb.onchange = () => { t.subs[+cb.dataset.sub].done = cb.checked; persist(); renderAll(); };
+  });
+  el.querySelectorAll("[data-sdel]").forEach(b => {
+    b.onclick = () => { t.subs.splice(+b.dataset.sdel,1); persist(); renderAll(); };
+  });
+  const addInp = el.querySelector("[data-subadd]");
+  const addSub = () => {
+    const v = addInp.value.trim();
+    if(!v) return;
+    (t.subs = t.subs||[]).push({t:v, done:false});
+    persist(); renderAll();
+  };
+  el.querySelector("[data-subaddbtn]").onclick = addSub;
+  addInp.onkeydown = e => { if(e.key === "Enter") addSub(); };
+  return el;
+}
+function renderLists(){
+  const open = state.tasks.filter(t=>!t.done);
+  const today = sortTasks(open.filter(t=>t.bucket==="today"));
+  const later = sortTasks(open.filter(t=>t.bucket==="later"));
+  const lt = $("listToday"), ll = $("listLater");
+  lt.innerHTML = ""; ll.innerHTML = "";
+  today.forEach(t=>lt.appendChild(taskCard(t)));
+  later.forEach(t=>ll.appendChild(taskCard(t)));
+  if(!today.length) lt.innerHTML = '<div class="emptycol">今日のタスクはありません</div>';
+  if(!later.length) ll.innerHTML = '<div class="emptycol">「あとで」は空です</div>';
+  $("cntToday").textContent = today.length;
+  $("cntLater").textContent = later.length;
+  $("minToday").textContent = "計 " + today.reduce((s,t)=>s+taskMinutes(t),0) + "分";
+  $("minLater").textContent = "計 " + later.reduce((s,t)=>s+taskMinutes(t),0) + "分";
+}
+function renderDone(){
+  const done = state.tasks.filter(t=>t.done)
+    .sort((a,b)=>(b.doneAt||"").localeCompare(a.doneAt||""));
+  $("cntDone").textContent = done.length;
+  $("listDone").innerHTML = done.length ? done.map(t=>`
+    <div class="doneitem">
+      <span class="cdot" style="background:${ankenColor(t.anken)}"></span>
+      <span class="dtitle">${esc(t.title)}</span>
+      <span class="dt">${esc(t.anken)}・${t.doneAt||""}</span>
+      <button class="iconbtn" data-dupdone="${t.id}" title="複製して新規追加">⧉</button>
+      <button class="iconbtn" data-undo="${t.id}" title="未完了に戻す">↩</button>
+    </div>`).join("") : '<div class="emptycol">まだ完了タスクはありません</div>';
+  $("listDone").querySelectorAll("[data-undo]").forEach(b=>{
+    b.onclick = () => {
+      const t = state.tasks.find(x=>x.id===b.dataset.undo);
+      if(t){ t.done = false; t.doneAt = null; persist(); renderAll(); }
+    };
+  });
+  $("listDone").querySelectorAll("[data-dupdone]").forEach(b=>{
+    b.onclick = () => duplicateTask(b.dataset.dupdone);
+  });
+}
+function renderAnkenSummary(){
+  const map = {};
+  for(const t of state.tasks){
+    const m = map[t.anken] || (map[t.anken] = {done:0, open:0, min:0});
+    if(t.done){ m.done++; m.min += taskMinutes(t); } else m.open++;
+  }
+  const rows = Object.entries(map).sort((a,b)=>b[1].min-a[1].min);
+  const maxMin = Math.max(1, ...rows.map(([,m])=>m.min));
+  $("ankSummary").innerHTML = rows.length ? rows.map(([name,m])=>`
+    <div class="ankrow">
+      <span class="cdot" style="background:${ankenColor(name)}"></span>
+      <span class="aname">${esc(name)}</span>
+      <span class="ankbar"><i style="width:${Math.round(m.min/maxMin*100)}%;background:${ankenColor(name)}"></i></span>
+      <span class="ah">${(m.min/60).toFixed(1)}h</span>
+      <span class="an">完了${m.done} / 残${m.open}</span>
+    </div>`).join("") : '<div class="emptycol">タスクを追加すると案件別に集計されます</div>';
+}
+
+/* ================= actions ================= */
+function toggleDone(id){
+  const t = state.tasks.find(x=>x.id===id);
+  if(!t) return;
+  t.done = !t.done;
+  t.doneAt = t.done ? nowStamp() : null;
+  if(t.done && state.focusId === id) state.focusId = null;
+  persist(); renderAll();
+  if(t.done) praise(t.title);
+}
+
+/* ================= modal ================= */
+function openTaskModal(id){
+  editingId = id || null;
+  const t = id ? state.tasks.find(x=>x.id===id) : null;
+  $("modalTitle").textContent = t ? "タスク編集" : "タスク追加";
+  $("fTitle").value = t ? t.title : "";
+  $("fAnken").value = t ? t.anken : "";
+  $("fProj").value = t ? (t.proj||"") : "";
+  $("fPri").value = t ? t.pri : "中";
+  $("fBucket").value = t ? t.bucket : "today";
+  $("fEst").value = t && t.est ? t.est : "";
+  $("fMin").value = t && t.min ? t.min : "";
+  $("fTarget").value = t ? (t.target||"") : "";
+  $("fDeadline").value = t ? (t.deadline||"") : "";
+  $("fSubs").value = t ? (t.subs||[]).map(s=>s.t).join("\n") : "";
+  $("ankenList").innerHTML = [...new Set(state.tasks.map(x=>x.anken))]
+    .map(a=>`<option value="${esc(a)}">`).join("");
+  $("taskOverlay").classList.add("show");
+  $("fTitle").focus();
+}
+function saveTaskModal(){
+  const title = $("fTitle").value.trim();
+  const anken = $("fAnken").value.trim();
+  if(!title || !anken){ alert("タスク名と案件は必須です。"); return; }
+  const subsRaw = $("fSubs").value.split("\n").map(s=>s.trim()).filter(Boolean);
+  const old = editingId ? state.tasks.find(x=>x.id===editingId) : null;
+  const oldSubs = old ? (old.subs||[]) : [];
+  const subs = subsRaw.map(txt => {
+    const prev = oldSubs.find(s=>s.t===txt);
+    return {t:txt, done: prev ? prev.done : false};
+  });
+  const data = {
+    title, anken,
+    proj: $("fProj").value.trim(),
+    pri: $("fPri").value,
+    bucket: $("fBucket").value,
+    est: parseFloat($("fEst").value) || 0,
+    min: parseInt($("fMin").value) || 0,
+    target: $("fTarget").value || "",
+    deadline: $("fDeadline").value || "",
+    subs
+  };
+  if(old){ Object.assign(old, data); }
+  else{
+    state.tasks.push(Object.assign({id:uid(), done:false, doneAt:null, createdAt:todayStr()}, data));
+  }
+  ankenColor(anken);
+  $("taskOverlay").classList.remove("show");
+  persist(); renderAll();
+}
+
+/* ================= duplicate ================= */
+function duplicateTask(id){
+  const t = state.tasks.find(x=>x.id===id);
+  if(!t) return;
+  openTaskModal(null); // 新規モードで開いてから値を流し込む
+  $("modalTitle").textContent = "タスク追加（複製）";
+  $("fTitle").value = t.title;
+  $("fAnken").value = t.anken;
+  $("fProj").value = t.proj || "";
+  $("fPri").value = t.pri;
+  $("fBucket").value = t.bucket;
+  $("fEst").value = t.est || "";
+  $("fMin").value = t.min || "";
+  // 日付は古い情報なので引き継がない（保存前に設定し直す）
+  $("fTarget").value = "";
+  $("fDeadline").value = "";
+  $("fSubs").value = (t.subs||[]).map(s=>s.t).join("\n"); // チェックは未完了で引き継ぐ
+  $("fTitle").focus();
+}
+function renderDupList(q){
+  const kw = (q||"").trim().toLowerCase();
+  const list = [...state.tasks]
+    .sort((a,b)=>((b.doneAt||b.createdAt||"")).localeCompare(a.doneAt||a.createdAt||""))
+    .filter(t=>!kw || (t.title + " " + t.anken + " " + (t.proj||"")).toLowerCase().includes(kw));
+  $("dupList").innerHTML = list.length ? list.map(t=>`
+    <button class="dupitem" data-dup="${t.id}">
+      <span class="cdot" style="background:${ankenColor(t.anken)}"></span>
+      <span class="dtit">${esc(t.title)}</span>
+      <span class="dst ${t.done?"fin":""}">${t.done?"完了":"未完了"}</span>
+      <span class="dmeta">${esc(t.anken)}${t.proj?"・"+esc(t.proj):""}<br>${t.done&&t.doneAt?t.doneAt.slice(0,10):(t.createdAt||"")}</span>
+    </button>`).join("") : '<div class="emptycol">該当するタスクがありません</div>';
+  $("dupList").querySelectorAll("[data-dup]").forEach(b=>{
+    b.onclick = () => { $("dupOverlay").classList.remove("show"); duplicateTask(b.dataset.dup); };
+  });
+}
+function openDupPicker(){
+  if(!state.tasks.length){ toast("複製できるタスクがまだありません"); return; }
+  $("dupSearch").value = "";
+  renderDupList("");
+  $("dupOverlay").classList.add("show");
+  $("dupSearch").focus();
+}
+
+/* ================= CSV ================= */
+function exportCsv(){
+  const head = ["案件","プロジェクト","タスク","優先度","見積工数(h)","所要時間(分)","目標日","締切","区分","状態","完了日時","サブタスク進捗"];
+  const q = v => '"' + String(v ?? "").replace(/"/g,'""') + '"';
+  const rows = state.tasks.map(t=>{
+    const subs = t.subs||[];
+    return [
+      t.anken, t.proj||"", t.title, t.pri, t.est||"", t.min||"",
+      t.target||"", t.deadline||"",
+      t.bucket==="today" ? "今日やる" : "あとで",
+      t.done ? "完了" : "未完了", t.doneAt||"",
+      subs.length ? subs.filter(s=>s.done).length + "/" + subs.length : ""
+    ].map(q).join(",");
+  });
+  const csv = "﻿" + head.map(q).join(",") + "\n" + rows.join("\n");
+  download("pitwork_tasks_" + todayStr() + ".csv", csv, "text/csv;charset=utf-8");
+  toast("⬇ CSVを書き出しました（" + state.tasks.length + "件）");
+}
+
+/* ================= pomodoro ================= */
+const FOCUS_SEC = 25*60, BREAK_SEC = 5*60;
+const RING_C = 2*Math.PI*48; // 301.6
+let pomo = {mode:"focus", running:false, remain:FOCUS_SEC, endAt:null, timer:null};
+
+function pomoTick(){
+  if(!pomo.running) return;
+  pomo.remain = Math.max(0, Math.round((pomo.endAt - Date.now())/1000));
+  if(pomo.remain <= 0){
+    beep();
+    if(pomo.mode === "focus"){
+      const d = todayStr();
+      state.pomo[d] = (state.pomo[d]||0) + 1;
+      persist(); renderDash();
+      toast("🍅 25分集中おつかれさま！5分休憩へ");
+      pomo.mode = "break"; pomo.remain = BREAK_SEC;
+      pomo.endAt = Date.now() + BREAK_SEC*1000; // 自動で休憩開始
+    }else{
+      toast("☕ 休憩おわり。次の集中へどうぞ");
+      pomo.mode = "focus"; pomo.remain = FOCUS_SEC;
+      pomo.running = false; pomo.endAt = null;
+      clearInterval(pomo.timer); pomo.timer = null;
+    }
+  }
+  renderPomo();
+}
+function pomoStartPause(){
+  if(pomo.running){
+    pomo.running = false;
+    clearInterval(pomo.timer); pomo.timer = null;
+  }else{
+    pomo.running = true;
+    pomo.endAt = Date.now() + pomo.remain*1000;
+    pomo.timer = setInterval(pomoTick, 250);
+  }
+  renderPomo();
+}
+function pomoReset(){
+  pomo.running = false; clearInterval(pomo.timer); pomo.timer = null;
+  pomo.mode = "focus"; pomo.remain = FOCUS_SEC; pomo.endAt = null;
+  renderPomo();
+}
+function renderPomo(){
+  const mm = String(Math.floor(pomo.remain/60)).padStart(2,"0");
+  const ss = String(pomo.remain%60).padStart(2,"0");
+  $("pomoTime").textContent = mm + ":" + ss;
+  $("pomoMode").textContent = pomo.mode === "focus" ? "FOCUS" : "BREAK";
+  $("pomoBox").classList.toggle("break", pomo.mode === "break");
+  const total = pomo.mode === "focus" ? FOCUS_SEC : BREAK_SEC;
+  $("pomoArc").style.strokeDashoffset = (RING_C * (1 - pomo.remain/total)).toFixed(1);
+  $("pomoStart").textContent = pomo.running ? "⏸ 一時停止" : "▶ 開始";
+  $("pomoCount").textContent = state.pomo[todayStr()] || 0;
+  document.title = pomo.running
+    ? `${mm}:${ss} ${pomo.mode==="focus"?"🍅":"☕"} PIT WORK`
+    : "MULTI-TASK PIT WORK — 複数案件Todo";
+}
+function beep(){
+  try{
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [0, .2, .4].forEach((d,i)=>{
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.frequency.value = 780 + i*120; o.type = "sine";
+      g.gain.setValueAtTime(.18, ctx.currentTime + d);
+      g.gain.exponentialRampToValueAtTime(.001, ctx.currentTime + d + .18);
+      o.start(ctx.currentTime + d); o.stop(ctx.currentTime + d + .2);
+    });
+  }catch(e){}
+}
+
+/* ================= review / report ================= */
+function buildReport(){
+  const st = stats();
+  const d = todayStr();
+  const doneList = st.doneTodayList.map(t=>`- 【${t.anken}】${t.title}（${taskMinutes(t)}分）`).join("\n") || "- （なし）";
+  const remainToday = state.tasks.filter(t=>!t.done && t.bucket==="today").length;
+  return `# PIT WORK 日次報告 ${d}
+
+## 今日のふり返り
+- 完了タスク: ${st.doneToday}件
+- 消化した時間: ${Math.round(st.doneTodayMin)}分（${(st.doneTodayMin/60).toFixed(1)}h）
+- 集中回数（ポモドーロ）: ${st.pomoToday}回
+
+## ダッシュボード
+- 今日の完了数: ${st.doneToday}件
+- 今週の稼働時間: ${st.weekHours.toFixed(1)}h
+- 完了率: ${st.rate}%（${st.doneCount}/${st.total}件）
+
+## 今日完了したタスク
+${doneList}
+
+## 持ち越し
+- 「今日やる」の残り: ${remainToday}件
+`;
+}
+function openReview(){
+  const st = stats();
+  $("revDate").textContent = "— " + todayStr();
+  $("revTiles").innerHTML = `
+    <div class="tile"><div class="tlabel">完了数</div><div class="tnum">${st.doneToday}<span class="unit">件</span></div></div>
+    <div class="tile"><div class="tlabel">消化した時間</div><div class="tnum">${Math.round(st.doneTodayMin)}<span class="unit">分</span></div></div>
+    <div class="tile"><div class="tlabel">集中回数</div><div class="tnum">${st.pomoToday}<span class="unit">回</span></div></div>`;
+  $("revPre").textContent = buildReport();
+  $("reviewOverlay").classList.add("show");
+}
+
+/* ================= render all / init ================= */
+function renderAll(){
+  $("todayLabel").textContent = new Date().toLocaleDateString("ja-JP",
+    {year:"numeric", month:"long", day:"numeric", weekday:"short"});
+  $("sortSel").value = state.sortBy;
+  $("capInput").value = state.capacity;
+  renderDash(); renderFocus(); renderLists(); renderDone(); renderAnkenSummary();
+  renderPomo(); renderSaveState();
+}
+
+loadLocal();
+dirty = false;
+
+$("btnAdd").onclick = () => openTaskModal(null);
+$("btnDup").onclick = openDupPicker;
+$("dupClose").onclick = () => $("dupOverlay").classList.remove("show");
+$("dupOverlay").onclick = e => { if(e.target === $("dupOverlay")) $("dupOverlay").classList.remove("show"); };
+$("dupSearch").oninput = e => renderDupList(e.target.value);
+$("fSave").onclick = saveTaskModal;
+$("fCancel").onclick = () => $("taskOverlay").classList.remove("show");
+$("taskOverlay").onclick = e => { if(e.target === $("taskOverlay")) $("taskOverlay").classList.remove("show"); };
+$("btnCsv").onclick = exportCsv;
+$("btnSaveMd").onclick = saveMd;
+$("btnOpenMd").onclick = openMd;
+$("btnReview").onclick = openReview;
+$("revClose").onclick = () => $("reviewOverlay").classList.remove("show");
+$("reviewOverlay").onclick = e => { if(e.target === $("reviewOverlay")) $("reviewOverlay").classList.remove("show"); };
+$("revDl").onclick = () => { download("pitwork_report_" + todayStr() + ".md", buildReport(), "text/markdown;charset=utf-8"); toast("⬇ 報告書をダウンロードしました"); };
+$("revCopy").onclick = async () => {
+  try{ await navigator.clipboard.writeText(buildReport()); toast("📋 報告書をコピーしました"); }
+  catch(e){ alert("コピーに失敗しました"); }
+};
+$("sortSel").onchange = e => { state.sortBy = e.target.value; persist(); renderLists(); };
+$("capInput").onchange = e => {
+  state.capacity = Math.max(30, parseInt(e.target.value)||360);
+  persist(); renderDash();
+};
+$("pomoStart").onclick = pomoStartPause;
+$("pomoReset").onclick = pomoReset;
+document.addEventListener("keydown", e => {
+  if(e.key === "Escape"){
+    $("taskOverlay").classList.remove("show");
+    $("reviewOverlay").classList.remove("show");
+    $("dupOverlay").classList.remove("show");
+  }
+});
+window.addEventListener("beforeunload", e => {
+  if(dirty && state.tasks.length){ e.preventDefault(); e.returnValue = ""; }
+});
+
+/* サンプルデータ（初回のみ） */
+if(!state.tasks.length && !localStorage.getItem(LS_KEY)){
+  const d = new Date();
+  const plus = n => { const x = new Date(d); x.setDate(x.getDate()+n); return todayStr(x); };
+  state.tasks = [
+    {id:uid(), title:"トップページのコーディング", anken:"A社コーポレート", proj:"リニューアル", pri:"高",
+     est:3, min:120, target:plus(1), deadline:plus(2), bucket:"today",
+     subs:[{t:"ヘッダー実装",done:true},{t:"メインビジュアル",done:false},{t:"レスポンシブ調整",done:false}],
+     done:false, doneAt:null, createdAt:todayStr()},
+    {id:uid(), title:"バナー3案の初稿提出", anken:"B社ECサイト", proj:"夏セール", pri:"中",
+     est:2, min:90, target:plus(3), deadline:plus(5), bucket:"today",
+     subs:[], done:false, doneAt:null, createdAt:todayStr()},
+    {id:uid(), title:"請求書の発行（6月分）", anken:"C社保守", proj:"", pri:"低",
+     est:0.5, min:20, target:plus(6), deadline:plus(8), bucket:"later",
+     subs:[], done:false, doneAt:null, createdAt:todayStr()}
+  ];
+  state.focusId = state.tasks[0].id;
+  state.tasks.forEach(t=>ankenColor(t.anken));
+  localStorage.setItem(LS_KEY, JSON.stringify(state));
+}
+
+renderAll();
+</script>
+</body>
+</html>
