@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, StatusBar,
-  SafeAreaView, Share, Alert,
+  SafeAreaView, Share, Alert, Platform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
@@ -51,6 +51,18 @@ export default function App() {
       console.warn('保存失敗', e);
     }
     debouncedPush(newState);
+  }, []);
+
+  // Disable Chrome auto-translate on web
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      document.documentElement.setAttribute('lang', 'ja');
+      document.documentElement.setAttribute('translate', 'no');
+      const meta = document.createElement('meta');
+      meta.name = 'google';
+      meta.content = 'notranslate';
+      document.head.appendChild(meta);
+    }
   }, []);
 
   // Load from AsyncStorage, then try cloud sync
