@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, StatusBar,
-  SafeAreaView, Share, Alert, Platform,
+  SafeAreaView, Share, Alert, Platform, Image,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
@@ -18,8 +18,13 @@ import TaskModal from './src/components/TaskModal';
 import ReviewModal from './src/components/ReviewModal';
 import DuplicateModal from './src/components/DuplicateModal';
 import DoneList from './src/components/DoneList';
-import { pullState, debouncedPush } from './src/sync';
+import { pullState, debouncedPush, SessionExpiredError } from './src/sync';
 import AnkenSummary from './src/components/AnkenSummary';
+import AdminPanel from './src/components/AdminPanel';
+import {
+  loadGoogleScript, initGoogleAuth, renderGoogleButton,
+  signOut, saveIdToken, getIdToken,
+} from './src/auth';
 
 const LS_KEY = 'anken_todo_md_v1';
 
@@ -33,6 +38,13 @@ const defaultState = {
 };
 
 export default function App() {
+  // ── 認証関連の state ──
+  const [authChecked, setAuthChecked] = useState(false);  // 初期トークンチェック完了
+  const [loggedIn, setLoggedIn] = useState(false);         // ログイン済みか
+  const [currentUser, setCurrentUser] = useState(null);    // { email, name, picture, role }
+  const [showAdmin, setShowAdmin] = useState(false);       // 管理画面表示
+
+  // ── タスク関連の state（既存） ──
   const [state, setState] = useState(defaultState);
   const [loaded, setLoaded] = useState(false);
   const [taskModalVisible, setTaskModalVisible] = useState(false);
@@ -41,8 +53,16 @@ export default function App() {
   const [dupVisible, setDupVisible] = useState(false);
   const [praiseMsg, setPraiseMsg] = useState(null);
   const praiseTimer = useRef(null);
+  const googleBtnRef = useRef(null);
 
-  // Persist to AsyncStorage + cloud sync
+  // ── セッション切れ時にログイン画面に戻す ──
+  const handleSessionExpired = useCallback(() => {
+    setLoggedIn(false);
+    setCurrentUser(null);
+    setLoaded(false);
+  }, []);
+
+  // ── Persist to AsyncStorage + cloud sync ──
   const persist = useCallback(async (newState) => {
     setState(newState);
     try {
@@ -50,10 +70,10 @@ export default function App() {
     } catch (e) {
       console.warn('保存失敗', e);
     }
-    debouncedPush(newState);
-  }, []);
+    debouncedPush(newState, handleSessionExpired);
+  }, [handleSessionExpired]);
 
-  // Disable Chrome auto-translate on web
+  // ── Chrome自動翻訳を無効化 ──
   useEffect(() => {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
       document.documentElement.setAttribute('lang', 'ja');
@@ -65,57 +85,121 @@ export default function App() {
     }
   }, []);
 
-  // Load from AsyncStorage, then try cloud sync
+  // ── 起動時: 保存済みトークンの確認 ──
   useEffect(() => {
     (async () => {
-      // 1. Load local first (instant)
-      let localData = null;
-      try {
-        const raw = await AsyncStorage.getItem(LS_KEY);
-        if (raw) localData = JSON.parse(raw);
-      } catch (e) {
-        console.warn('読込失敗', e);
-      }
-
-      // 2. Try pull from cloud
-      try {
-        const remote = await pullState();
-        if (remote && remote.data && remote.data.tasks) {
-          const merged = { ...defaultState, ...remote.data };
-          setState(merged);
-          await AsyncStorage.setItem(LS_KEY, JSON.stringify(merged));
-          setLoaded(true);
-          return;
-        }
-      } catch (e) {
-        console.warn('Cloud sync failed, using local:', e);
-      }
-
-      // 3. Fall back to local
-      if (localData) {
-        setState({ ...defaultState, ...localData });
-      } else {
-        const samples = createSampleTasks();
-        const colors = {};
-        samples.forEach((t) => {
-          if (!colors[t.anken]) {
-            colors[t.anken] = PALETTE[Object.keys(colors).length % PALETTE.length];
+      const token = await getIdToken();
+      if (token) {
+        // トークンが有効 → クラウドからデータを取得してログイン状態にする
+        try {
+          const remote = await pullState();
+          if (remote.user) setCurrentUser(remote.user);
+          if (remote.data && remote.data.tasks) {
+            const merged = { ...defaultState, ...remote.data };
+            setState(merged);
+            await AsyncStorage.setItem(LS_KEY, JSON.stringify(merged));
+          } else {
+            // クラウドにデータが無い → ローカルデータを使う
+            await loadLocal();
           }
-        });
-        const initial = {
-          ...defaultState,
-          tasks: samples,
-          ankenColors: colors,
-          focusId: samples[0].id,
-        };
-        setState(initial);
-        await AsyncStorage.setItem(LS_KEY, JSON.stringify(initial));
+          setLoggedIn(true);
+          setLoaded(true);
+        } catch (e) {
+          if (e instanceof SessionExpiredError) {
+            // トークン期限切れ → ログイン画面へ
+          } else {
+            // ネットワークエラー等 → ローカルデータで起動
+            console.warn('Cloud sync failed, using local:', e);
+            await loadLocal();
+            setLoggedIn(true);
+            setLoaded(true);
+          }
+        }
       }
-      setLoaded(true);
+      setAuthChecked(true);
     })();
   }, []);
 
-  // Get anken color
+  // ── ローカルデータの読み込み ──
+  const loadLocal = async () => {
+    try {
+      const raw = await AsyncStorage.getItem(LS_KEY);
+      if (raw) {
+        setState({ ...defaultState, ...JSON.parse(raw) });
+        return;
+      }
+    } catch (e) {
+      console.warn('読込失敗', e);
+    }
+    // ローカルにもデータが無い → サンプルタスク
+    const samples = createSampleTasks();
+    const colors = {};
+    samples.forEach((t) => {
+      if (!colors[t.anken]) {
+        colors[t.anken] = PALETTE[Object.keys(colors).length % PALETTE.length];
+      }
+    });
+    const initial = { ...defaultState, tasks: samples, ankenColors: colors, focusId: samples[0].id };
+    setState(initial);
+    await AsyncStorage.setItem(LS_KEY, JSON.stringify(initial));
+  };
+
+  // ── Google ログインボタンの初期化 ──
+  useEffect(() => {
+    if (authChecked && !loggedIn && Platform.OS === 'web') {
+      (async () => {
+        try {
+          await loadGoogleScript();
+          initGoogleAuth(handleGoogleCredential);
+          // ボタン描画はDOMが準備できてから
+          setTimeout(() => {
+            if (googleBtnRef.current) {
+              renderGoogleButton(googleBtnRef.current);
+            }
+          }, 100);
+        } catch (e) {
+          console.error('Google認証初期化失敗:', e);
+        }
+      })();
+    }
+  }, [authChecked, loggedIn]);
+
+  // ── Google ログイン成功時のコールバック ──
+  const handleGoogleCredential = async (response) => {
+    const idToken = response.credential;
+    await saveIdToken(idToken);
+
+    // クラウドからデータを取得（初回ログインならユーザー自動登録される）
+    try {
+      const remote = await pullState();
+      if (remote.user) setCurrentUser(remote.user);
+      if (remote.data && remote.data.tasks) {
+        const merged = { ...defaultState, ...remote.data };
+        setState(merged);
+        await AsyncStorage.setItem(LS_KEY, JSON.stringify(merged));
+      } else {
+        await loadLocal();
+      }
+      setLoggedIn(true);
+      setLoaded(true);
+    } catch (e) {
+      console.error('ログイン後の同期失敗:', e);
+      await loadLocal();
+      setLoggedIn(true);
+      setLoaded(true);
+    }
+  };
+
+  // ── ログアウト ──
+  const handleLogout = async () => {
+    await signOut();
+    setLoggedIn(false);
+    setCurrentUser(null);
+    setLoaded(false);
+    setShowAdmin(false);
+  };
+
+  // ── 既存のタスク操作（変更なし） ──
   const getAnkenColor = useCallback((name) => {
     if (state.ankenColors[name]) return state.ankenColors[name];
     const used = Object.keys(state.ankenColors).length;
@@ -132,7 +216,6 @@ export default function App() {
     }
   };
 
-  // Show praise toast
   const showPraise = (title) => {
     const msg = PRAISES[Math.floor(Math.random() * PRAISES.length)];
     setPraiseMsg({ msg, title });
@@ -141,7 +224,6 @@ export default function App() {
     praiseTimer.current = setTimeout(() => setPraiseMsg(null), 3000);
   };
 
-  // Task actions
   const toggleDone = (id) => {
     const newState = { ...state, tasks: state.tasks.map((t) => ({ ...t })) };
     const t = newState.tasks.find((x) => x.id === id);
@@ -209,28 +291,18 @@ export default function App() {
     persist(newState);
   };
 
-  // Task modal
-  const openAddModal = () => {
-    setEditingTask(null);
-    setTaskModalVisible(true);
-  };
+  const openAddModal = () => { setEditingTask(null); setTaskModalVisible(true); };
 
   const openEditModal = (id) => {
     const t = state.tasks.find((x) => x.id === id);
-    if (t) {
-      setEditingTask(t);
-      setTaskModalVisible(true);
-    }
+    if (t) { setEditingTask(t); setTaskModalVisible(true); }
   };
 
   const openDuplicateModal = (id) => {
     const t = state.tasks.find((x) => x.id === id);
     if (t) {
       setEditingTask({
-        ...t,
-        id: null,
-        target: '',
-        deadline: '',
+        ...t, id: null, target: '', deadline: '',
         subs: (t.subs || []).map((s2) => ({ ...s2, done: false })),
       });
       setTaskModalVisible(true);
@@ -242,24 +314,15 @@ export default function App() {
     ensureAnkenColor(newState, data.anken);
     if (editingTask && editingTask.id) {
       const idx = newState.tasks.findIndex((t) => t.id === editingTask.id);
-      if (idx >= 0) {
-        newState.tasks[idx] = { ...newState.tasks[idx], ...data };
-      }
+      if (idx >= 0) newState.tasks[idx] = { ...newState.tasks[idx], ...data };
     } else {
-      newState.tasks.push({
-        id: uid(),
-        done: false,
-        doneAt: null,
-        createdAt: todayStr(),
-        ...data,
-      });
+      newState.tasks.push({ id: uid(), done: false, doneAt: null, createdAt: todayStr(), ...data });
     }
     persist(newState);
     setTaskModalVisible(false);
     setEditingTask(null);
   };
 
-  // Pomodoro complete
   const onPomoComplete = () => {
     const d = todayStr();
     const newState = { ...state, pomo: { ...state.pomo } };
@@ -267,15 +330,11 @@ export default function App() {
     persist(newState);
   };
 
-  // Share all tasks
   const shareAllTasks = async () => {
     const report = buildReport(state);
-    try {
-      await Share.share({ message: report, title: 'PIT WORK タスク共有' });
-    } catch (e) {}
+    try { await Share.share({ message: report, title: 'PIT WORK タスク共有' }); } catch (e) {}
   };
 
-  // Duplicate picker
   const openDupPicker = () => {
     if (!state.tasks.length) {
       Alert.alert('', '複製できるタスクがまだありません');
@@ -284,6 +343,56 @@ export default function App() {
     setDupVisible(true);
   };
 
+  // ── 初期チェック中 ──
+  if (!authChecked) {
+    return (
+      <SafeAreaView style={styles.loadWrap}>
+        <Text style={styles.loadText}>読み込み中...</Text>
+      </SafeAreaView>
+    );
+  }
+
+  // ── ログイン画面 ──
+  if (!loggedIn) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <StatusBar barStyle="dark-content" backgroundColor={COLORS.bg} />
+        <View style={styles.loginContainer}>
+          <View style={styles.loginCard}>
+            <Text style={styles.loginLogoSub}>MULTI-TASK</Text>
+            <Text style={styles.loginLogoTitle}>
+              <Text style={styles.logoPit}>PIT</Text> WORK
+            </Text>
+            <Text style={styles.loginDesc}>
+              複数案件を並行管理するTodoアプリ
+            </Text>
+            <View style={styles.loginDivider} />
+            <Text style={styles.loginLabel}>Googleアカウントでログイン</Text>
+            {/* Google ログインボタンの描画先 */}
+            <View
+              ref={googleBtnRef}
+              style={styles.googleBtnWrap}
+            />
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // ── 管理画面 ──
+  if (showAdmin) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <StatusBar barStyle="dark-content" backgroundColor={COLORS.bg} />
+        <AdminPanel
+          currentUser={currentUser}
+          onBack={() => setShowAdmin(false)}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  // ── メイン画面（読み込み中） ──
   if (!loaded) {
     return (
       <SafeAreaView style={styles.loadWrap}>
@@ -307,11 +416,32 @@ export default function App() {
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         {/* Header */}
         <View style={styles.header}>
-          <View style={styles.logoRow}>
-            <Text style={styles.logoSub}>MULTI-TASK</Text>
-            <Text style={styles.logoTitle}><Text style={styles.logoPit}>PIT</Text> WORK</Text>
+          <View style={styles.headerTop}>
+            <View>
+              <View style={styles.logoRow}>
+                <Text style={styles.logoSub}>MULTI-TASK</Text>
+                <Text style={styles.logoTitle}><Text style={styles.logoPit}>PIT</Text> WORK</Text>
+              </View>
+              <Text style={styles.dateLabel}>{formatDateJa()}</Text>
+            </View>
+            {/* ユーザー情報・ログアウト */}
+            <View style={styles.userArea}>
+              {currentUser?.picture ? (
+                <Image source={{ uri: currentUser.picture }} style={styles.userAvatar} />
+              ) : null}
+              <Text style={styles.userName} numberOfLines={1}>
+                {currentUser?.name || currentUser?.email || ''}
+              </Text>
+              {currentUser?.role === 'admin' && (
+                <TouchableOpacity style={styles.adminBtn} onPress={() => setShowAdmin(true)}>
+                  <Text style={styles.adminBtnText}>管理</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+                <Text style={styles.logoutBtnText}>ログアウト</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-          <Text style={styles.dateLabel}>{formatDateJa()}</Text>
         </View>
 
         {/* Header buttons */}
@@ -459,12 +589,45 @@ const styles = StyleSheet.create({
   loadWrap: { flex: 1, backgroundColor: COLORS.bg, justifyContent: 'center', alignItems: 'center' },
   loadText: { color: COLORS.muted, fontSize: 14 },
 
+  // ── ログイン画面 ──
+  loginContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+  loginCard: {
+    backgroundColor: COLORS.card, borderRadius: 16, padding: 40,
+    alignItems: 'center', width: '100%', maxWidth: 380,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08, shadowRadius: 12, elevation: 4,
+    borderWidth: 1, borderColor: COLORS.line,
+  },
+  loginLogoSub: { fontSize: 10, letterSpacing: 3, color: COLORS.muted, marginBottom: 2 },
+  loginLogoTitle: { fontSize: 28, letterSpacing: 3, color: COLORS.ink, marginBottom: 8 },
+  loginDesc: { fontSize: 13, color: COLORS.ink2, marginBottom: 20 },
+  loginDivider: { width: 60, height: 1, backgroundColor: COLORS.line2, marginBottom: 20 },
+  loginLabel: { fontSize: 12, color: COLORS.muted, marginBottom: 16 },
+  googleBtnWrap: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+
+  // ── ヘッダー ──
   header: { paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: COLORS.line2 },
+  headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   logoRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
   logoSub: { fontSize: 10, letterSpacing: 3, color: COLORS.muted },
   logoTitle: { fontSize: 18, letterSpacing: 2, color: COLORS.ink },
   logoPit: { color: COLORS.pinkDeep },
   dateLabel: { fontSize: 12, color: COLORS.ink2, marginTop: 4, letterSpacing: 0.5 },
+
+  // ── ユーザーエリア ──
+  userArea: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
+  userAvatar: { width: 28, height: 28, borderRadius: 14 },
+  userName: { fontSize: 11, color: COLORS.ink2, maxWidth: 100 },
+  adminBtn: {
+    backgroundColor: COLORS.warn, borderRadius: 6,
+    paddingVertical: 3, paddingHorizontal: 8,
+  },
+  adminBtnText: { fontSize: 10, color: '#fff', fontWeight: '600' },
+  logoutBtn: {
+    borderWidth: 1, borderColor: COLORS.line2, borderRadius: 6,
+    paddingVertical: 3, paddingHorizontal: 8, backgroundColor: COLORS.card,
+  },
+  logoutBtnText: { fontSize: 10, color: COLORS.ink2 },
 
   headerBtns: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10, marginBottom: 14 },
   btn: {
